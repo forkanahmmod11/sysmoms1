@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
-import { useAuth } from '@/lib/auth';
+import { isAdminEmail, useAuth } from '@/lib/auth';
 import { SuperAdminPanel } from '@/components/SuperAdminPanel';
 import { Workspace } from '@/components/Workspace';
 import { SubscriptionPage } from '@/components/SubscriptionPage';
@@ -31,10 +31,12 @@ function App() {
     }
   }, [loading, session, offlineAccess]);
 
+  const hasSuperAdminAccess = profile?.role === 'super_admin' || isAdminEmail(profile?.email || session?.user?.email || '');
+
   useEffect(() => {
     if (screen !== 'app') return;
     if (!profile) return;
-    if (profile.role === 'super_admin') { setSubStatus('approved'); return; }
+    if (hasSuperAdminAccess) { setSubStatus('approved'); return; }
     const userId = session?.user?.id || profile.id;
     (async () => {
       setSubStatus('checking');
@@ -44,7 +46,7 @@ function App() {
       else if (req.status === 'pending') setSubStatus('pending');
       else setSubStatus('rejected');
     })();
-  }, [screen, profile, session]);
+  }, [screen, profile, session, hasSuperAdminAccess]);
 
   const enterAuth = (mode: 'signin' | 'signup') => {
     setAuthError(null);
@@ -92,7 +94,7 @@ function App() {
         style={{ minHeight: '100vh' }}
       >
         {screen === 'auth' && <AuthScreen mode={authMode} loading={authLoading} error={authError} info={authInfo} onSubmit={handleAuth} onBack={() => setScreen('landing')} onSwitchMode={(m) => { setAuthMode(m); setAuthError(null); setAuthInfo(null); }} />}
-        {screen === 'app' && (session || offlineAccess) && (profile?.role === 'super_admin'
+        {screen === 'app' && (session || offlineAccess) && (hasSuperAdminAccess
           ? <SuperAdminPanel onLogout={handleLogout} />
           : subStatus === 'approved'
             ? <Workspace onLogout={handleLogout} />

@@ -42,7 +42,7 @@ export type UserProfile = {
   organization: Organization | null;
 };
 
-const ADMIN_EMAILS = ['ahmedforkan26@gmail.com', 'forkanahmmod@gmail.com'];
+const ADMIN_EMAILS = ['ahmedforkan26@gmail.com', 'forkanahmmod@gmail.com', 'admin@sysmobyte.com'];
 
 function getAuthErrorMessage(message: string): string {
   if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {

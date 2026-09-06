@@ -88,7 +88,7 @@ async function loadProfile(userId: string, userEmail: string | undefined): Promi
     email: profile?.email || userEmail || '',
     fullName: profile?.full_name || meta.full_name || meta.name || (userEmail ? userEmail.split('@')[0] : 'User'),
     avatarUrl: profile?.avatar_url || meta.avatar_url || meta.picture || null,
-    role: (profile?.role as Role) || 'employee',
+    role: (profile?.role as Role) || (userEmail && isAdminEmail(userEmail) ? 'super_admin' : 'employee'),
     organization: orgData || null,
   };
 }

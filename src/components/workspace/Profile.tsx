@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Mail, MessageSquare, Pencil, ShieldCheck, Target } from 'lucide-react';
+import { CalendarDays, Camera, Mail, MessageSquare, Pencil, ShieldCheck, Target } from 'lucide-react';
 import { ROLE_LABELS, supabase, useAuth } from '@/lib/auth';
 import { initials } from '@/lib/initials';
+import { ProfilePhotoDialog, type PhotoKind } from '@/components/workspace/ProfilePhotoDialog';
 
 type ProfileDetails = {
   full_name: string | null;
@@ -18,6 +19,7 @@ export function ProfileView({ onEdit, onMessage }: { onEdit: () => void; onMessa
   const [stats, setStats] = useState({ done: 0, open: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingPhoto, setEditingPhoto] = useState<PhotoKind | null>(null);
 
   useEffect(() => {
     if (!supabase || !profile?.id) { setLoading(false); return; }
@@ -39,6 +41,11 @@ export function ProfileView({ onEdit, onMessage }: { onEdit: () => void; onMessa
 
   const name = details?.full_name || profile?.fullName || 'User';
   const avatarUrl = details?.avatar_url || profile?.avatarUrl || null;
+  const coverUrl = details?.cover_url || null;
+
+  const handlePhotoSaved = (kind: PhotoKind, url: string) => {
+    setDetails((prev) => (prev ? { ...prev, [kind === 'avatar' ? 'avatar_url' : 'cover_url']: url } : prev));
+  };
   const joined = details?.created_at
     ? new Date(details.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : '—';
@@ -48,11 +55,14 @@ export function ProfileView({ onEdit, onMessage }: { onEdit: () => void; onMessa
   return (
     <div className="profile-page">
       <section className="profile-hero panel">
-        <div className="profile-cover" style={details?.cover_url ? { backgroundImage: `url(${details.cover_url})` } : undefined} />
+        <div className="profile-cover" style={coverUrl ? { backgroundImage: `url(${coverUrl})` } : undefined}>
+          <button type="button" className="profile-cover-edit" onClick={() => setEditingPhoto('cover')}><Camera size={15} /> Change cover</button>
+        </div>
         <div className="profile-identity">
-          <div className="profile-hero-avatar">
+          <button type="button" className="profile-hero-avatar" onClick={() => setEditingPhoto('avatar')} aria-label="Change profile photo">
             {avatarUrl ? <img src={avatarUrl} alt={name} /> : <span>{initials(name)}</span>}
-          </div>
+            <i><Camera size={15} /></i>
+          </button>
           <div className="profile-title">
             <h1>{name}</h1>
             <p>{roleLabel}{profile?.organization?.name ? ` · ${profile.organization.name}` : ''}</p>
@@ -68,6 +78,15 @@ export function ProfileView({ onEdit, onMessage }: { onEdit: () => void; onMessa
           <div><strong>{joined}</strong><span>Member since</span></div>
         </div>
       </section>
+
+      {editingPhoto && (
+        <ProfilePhotoDialog
+          kind={editingPhoto}
+          currentUrl={editingPhoto === 'avatar' ? avatarUrl : coverUrl}
+          onClose={() => setEditingPhoto(null)}
+          onSaved={(url) => handlePhotoSaved(editingPhoto, url)}
+        />
+      )}
 
       {error && <div className="auth-error">{error}</div>}
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth, supabase, type UserProfile } from '@/lib/auth';
 import { TasksView } from '@/components/workspace/Tasks';
@@ -9,6 +9,8 @@ import { MessagesView } from '@/components/workspace/Messages';
 import { TransactionsView } from '@/components/workspace/Transactions';
 import { SettingsView } from '@/components/workspace/Settings';
 import { SearchRecommendations } from '@/components/workspace/SearchRecommendations';
+import { ProfileView } from '@/components/workspace/Profile';
+import { initials } from '@/lib/initials';
 import { getUserRequest, type SubscriptionRequest } from '@/lib/subscription';
 import { SubscriptionPage } from '@/components/SubscriptionPage';
 import {
@@ -18,7 +20,7 @@ import {
   UsersRound, X, Zap, Shield,
 } from 'lucide-react';
 
-export type View = 'overview' | 'subscription' | 'tasks' | 'projects' | 'team' | 'schedule' | 'messages' | 'transactions' | 'settings';
+export type View = 'overview' | 'subscription' | 'tasks' | 'projects' | 'team' | 'schedule' | 'messages' | 'transactions' | 'settings' | 'profile';
 
 type NavItem = { label: string; icon: typeof LayoutDashboard; view: View; badge?: string };
 
@@ -32,11 +34,10 @@ const navItems: NavItem[] = [
   { label: 'Messages', icon: MessageSquare, view: 'messages' },
 ];
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+const viewLabels: Record<View, string> = {
+  overview: 'Overview', subscription: 'Subscription', tasks: 'My tasks', projects: 'Projects', team: 'Team',
+  schedule: 'Schedule', messages: 'Messages', transactions: 'Transactions', settings: 'Settings', profile: 'Profile',
+};
 
 export function Workspace({ onLogout, onEnterPlatform, limited = false }: { onLogout: () => void; onEnterPlatform?: () => void; limited?: boolean }) {
   const { profile } = useAuth();
@@ -45,8 +46,19 @@ export function Workspace({ onLogout, onEnterPlatform, limited = false }: { onLo
   const [searchOpen, setSearchOpen] = useState(false);
   const [taskBadge, setTaskBadge] = useState<string | undefined>();
   const [msgBadge, setMsgBadge] = useState<string | undefined>();
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const lastScrollTop = useRef(0);
 
-  const activeLabel = useMemo(() => navItems.find((item) => item.view === view)?.label || 'Overview', [view]);
+  const activeLabel = useMemo(() => viewLabels[view], [view]);
+
+  const handleContentScroll = () => {
+    const top = contentRef.current?.scrollTop ?? 0;
+    const delta = top - lastScrollTop.current;
+    lastScrollTop.current = top;
+    if (Math.abs(delta) < 6) return;
+    setHeaderHidden(delta > 0 && top > 80);
+  };
 
   useEffect(() => {
     if (!supabase || !profile?.id) return;
@@ -106,21 +118,21 @@ export function Workspace({ onLogout, onEnterPlatform, limited = false }: { onLo
             <span><strong>Need a hand?</strong><small>Visit help center</small></span>
             <ArrowUpRight size={15} />
           </div>
-          <UserCard profile={profile} onLogout={onLogout} />
+          <UserCard profile={profile} onLogout={onLogout} onOpenProfile={() => { setView('profile'); setMobileMenu(false); }} />
         </div>
       </aside>
       <section className="workspace-main">
-        <header className="workspace-header">
+        <header className={`workspace-header ${headerHidden ? 'is-hidden' : ''}`}>
           <button className="mobile-menu-button" onClick={() => setMobileMenu(true)}><Menu size={21} /></button>
           <div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activeLabel}</strong></div>
           <div className="header-actions">
             <button className={`icon-button ${searchOpen ? 'selected' : ''}`} onClick={() => setSearchOpen(!searchOpen)}><Search size={19} /></button>
             <button className="icon-button notification"><Bell size={19} /><i /></button>
-            <HeaderAvatar profile={profile} />
+            <HeaderAvatar profile={profile} onOpen={() => setView('profile')} />
           </div>
           {searchOpen && <SearchRecommendations profile={profile} onSelect={(target) => { setView(target as View); setSearchOpen(false); }} />}
         </header>
-        <div className="content-area">
+        <div className="content-area" ref={contentRef} onScroll={handleContentScroll}>
           {limited && <div className="workspace-activation-banner"><div><strong>Your workspace is created but not fully activated.</strong><br/><span>Purchase a subscription and wait for admin approval to unlock projects, tasks, team, messages and all workspace tools.</span></div><button className="primary-button small" onClick={() => setView('subscription')}>View subscription</button></div>}
           <AnimatePresence mode="wait">
             <motion.div key={view} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
@@ -133,6 +145,7 @@ export function Workspace({ onLogout, onEnterPlatform, limited = false }: { onLo
               {view === 'messages' && <MessagesView />}
               {view === 'transactions' && <TransactionsView />}
               {view === 'settings' && <SettingsView />}
+              {view === 'profile' && <ProfileView onEdit={() => setView('settings')} onMessage={() => setView('messages')} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -162,7 +175,7 @@ function Logo() {
   return <div className="brand"><span className="brand-mark"><span /><span /><span /></span><span>sysmo<span className="brand-accent">byte</span></span></div>;
 }
 
-function UserCard({ profile, onLogout }: { profile: UserProfile | null; onLogout: () => void }) {
+function UserCard({ profile, onLogout, onOpenProfile }: { profile: UserProfile | null; onLogout: () => void; onOpenProfile: () => void }) {
   const [open, setOpen] = useState(false);
   const name = profile?.fullName || 'Guest';
   const role = profile?.role || 'employee';
@@ -173,14 +186,18 @@ function UserCard({ profile, onLogout }: { profile: UserProfile | null; onLogout
         <span><strong>{name}</strong><small>{role.replace(/_/g, ' ')}</small></span>
         <MoreHorizontal size={17} />
       </button>
-      {open && <div className="user-popover"><button onClick={onLogout}>Sign out</button></div>}
+      {open && <div className="user-popover"><button onClick={() => { setOpen(false); onOpenProfile(); }}>View profile</button><button onClick={onLogout}>Sign out</button></div>}
     </div>
   );
 }
 
-function HeaderAvatar({ profile }: { profile: UserProfile | null }) {
+function HeaderAvatar({ profile, onOpen }: { profile: UserProfile | null; onOpen: () => void }) {
   const name = profile?.fullName || 'Guest';
-  return profile?.avatarUrl ? <img src={profile.avatarUrl} alt={name} className="header-avatar img" /> : <div className="header-avatar">{initials(name)}</div>;
+  return (
+    <button type="button" className="header-avatar-button" onClick={onOpen} aria-label="Open your profile">
+      {profile?.avatarUrl ? <img src={profile.avatarUrl} alt={name} className="header-avatar img" /> : <span className="header-avatar">{initials(name)}</span>}
+    </button>
+  );
 }
 
 type TaskRow = { id: string; title: string; status: string; priority: string; due_date: string | null; profiles: { full_name: string }[] | null; projects: { name: string }[] | null };
